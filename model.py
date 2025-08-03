@@ -4,8 +4,8 @@ class MeshInspectRequest(BaseModel):
     mesh_url: HttpUrl
 
 class MeshInspectResponse(BaseModel):
-    is_printable: bool
-    reason: dict
+    is_printable: str
+    info: dict
 
 class MeshInfoRequest(BaseModel):
     mesh_url: HttpUrl
