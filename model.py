@@ -6,7 +6,7 @@ class MeshInspectRequest(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "mesh_url": "https://raw.githubusercontent.com/zhachu16/wdg_mesh_inspector_api/main/big_sphere_exmaple.stl"
+                "mesh_url": "https://raw.githubusercontent.com/zhachu16/wdg_mesh_inspector_api/main/big_sphere_example.stl"
             }
         }
     }
