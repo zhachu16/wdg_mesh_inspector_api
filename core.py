@@ -15,12 +15,12 @@ MIN_WALL_THICKNESS_MEDIUM = 50.0
 MIN_WALL_THICKNESS_LARGE = 150.0
 MAX_PROTRUSION_ASPECT_RATIO = 1.0
 MAX_PROTRUSION_FRAGILE_RADIUS = 5.0
-CURVATURE_THRESHOLD = 1.0
+CURVATURE_THRESHOLD = 50.0
 DESNSITY = 1.5e-6 # kg/mm3
 UNIT_PRICE = 15.0 # in GBP/kg
 
 
-def _get_mesh_from_url(mesh_url) -> trimesh.Trimesh:
+def get_mesh_from_url(mesh_url) -> trimesh.Trimesh:
     """
     Download and load a mesh file from a URL.
 
@@ -47,7 +47,7 @@ def _get_mesh_from_url(mesh_url) -> trimesh.Trimesh:
         raise RuntimeError(f"Failed to load mesh from URL: {str(e)}")
 
 
-def inspect_mesh(mesh_url,
+def inspect_mesh(mesh,
                  voxel_size=VOXEL_SIZE,
                  min_wall_thickness_small=MIN_WALL_THICKNESS_SMALL,
                  min_wall_thickness_medium=MIN_WALL_THICKNESS_MEDIUM,
@@ -75,10 +75,8 @@ def inspect_mesh(mesh_url,
     :param curvature_threshold: float Curvature value to flag fragile tips.
     :return: tuple (is_printable: bool, info: dict) Printability status and info regarding printability.
     """
-    is_printable = "Very_likely"
+    is_printable = True
     info = {}
-
-    mesh = _get_mesh_from_url(mesh_url)
 
     # --- Size Classification ---
     max_dimension = max(mesh.bounding_box.extents)
@@ -95,7 +93,7 @@ def inspect_mesh(mesh_url,
         voxel_grid = voxels.matrix.astype(np.uint8)
 
     except Exception as e:
-        return {"is_printable": "Error",
+        return {"is_printable": False,
                 "info": {"Error": f"Voxelization failed: {str(e)}, please check project file"}}
 
     # --- Wall Thickness Check ---
@@ -115,12 +113,12 @@ def inspect_mesh(mesh_url,
             true_thickness = trimesh.proximity.thickness(mesh, [min_point_mesh])[0]
 
             if true_thickness < min_wall_thickness:
-                is_printable = "Unlikely"
+                is_printable = False
                 info['Thin walls'] = (f"Wall thickness below minimum: "
                                         f"{true_thickness:.2f}mm < {min_wall_thickness}mm")
 
     except Exception as e:
-        return {"is_printable": "Error",
+        return {"is_printable": False,
                 "info": {"Error": f"Wall thickness analysis failed: {str(e)}, please check project file"}}
 
     # --- Fragile Protrusion Check ---
@@ -147,7 +145,7 @@ def inspect_mesh(mesh_url,
                     max_length = np.max(distances)
                     aspect_ratio = max_length / radius
                     if aspect_ratio > max_protrusion_aspect_ratio:
-                        is_printable = "Unlikely"
+                        is_printable = False
                         info['Protrusions'] = (f"Fragile protrusion detected: "
                                                  f"length={max_length:.2f}mm, "
                                                  f"aspect_ratio={aspect_ratio:.2f}")
@@ -162,24 +160,23 @@ def inspect_mesh(mesh_url,
             curvature = trimesh.curvature.discrete_gaussian_curvature_measure(
                 mesh, mesh.vertices, radius=min_wall_thickness_small
             )
-            if np.any(curvature > curvature_threshold):
-                max_curvature = np.max(curvature)
-                is_printable = "Likely"
-                info['Structural fragililty'] = (f"Potential fragile strucutre detected,"
-                                                   f"please check for sharp tips, thin stripes etc.")
+            if np.any(curvature > curvature_threshold) and max_dimension<100.0:
+                is_printable = False
+                info['Structural fragility'] = (f"Potential fragile strucutre detected,"
+                                                f"please check for sharp tips, thin stripes etc.")
+
 
     except Exception as e:
         return {"is_printable": "Error",
                 "info": {"Error": f"Curvature analysis failed: {str(e)}, please check project file"}}
 
-    if is_printable == "Very_likely":
+    if is_printable:
         info['Printable'] = 'No obvious fault detected, mesh is likely printable'
 
     return {"is_printable":is_printable, "info": info}
 
 
-def get_mesh_info(mesh_url):
-    mesh = _get_mesh_from_url(mesh_url)
+def get_mesh_info(mesh):
     try:
         dims = mesh.bounding_box.extents # in mm
         x_dim = dims[0]
@@ -191,7 +188,7 @@ def get_mesh_info(mesh_url):
         max_dim = max(dims)
         if max_dim < 100:
             shipping_cost = 10
-        if max_dim >= 100 and max_dim < 200:
+        elif max_dim >= 100 and max_dim < 200:
             shipping_cost = 20
         elif max_dim >= 200 and max_dim < 300:
             shipping_cost = 60
@@ -206,3 +203,8 @@ def get_mesh_info(mesh_url):
         raise RuntimeError(f"Failed to get mesh info: {str(e)}")
 
     return {"x_dim": x_dim, "y_dim": y_dim, "z_dim": z_dim, "weight": weight, "estimated_price": price_est}
+
+
+mesh = trimesh.load("small_sphere_example.stl")
+a = inspect_mesh(mesh)
+print(a)
